@@ -158,11 +158,35 @@ Interview-GEN-AI/
 - Large PDF files may take longer to parse
 - First-time requests may take slightly longer due to API initialization
 
+## 🚀 Deployment
+
+### Deploy on Render (Recommended - Free)
+
+Render is the easiest way to deploy your Interview-AI application for free!
+
+**Quick Deploy:**
+1. Go to https://render.com
+2. Sign up with GitHub
+3. Follow the step-by-step guide in [RENDER-DEPLOYMENT.md](RENDER-DEPLOYMENT.md)
+
+**Features:**
+- ✅ Free tier available
+- ✅ Auto-deploy on GitHub push
+- ✅ No credit card required
+- ✅ Zero configuration needed
+
+**Deployment Time:** ~5 minutes
+
+👉 **[See Full Render Deployment Guide →](RENDER-DEPLOYMENT.md)**
+
+---
+
 ## Known Issues
 
 - Timeout may occur on very large resume files (>10MB)
 - Some PDF formats may not parse correctly
 - API rate limits apply per Google Generative AI plan
+- Free tier services spin down after 15 minutes of inactivity on Render
 
 ## Future Enhancements
 
@@ -181,6 +205,12 @@ MONGO_URI          # MongoDB Atlas connection string
 GOOGLE_GENAI_API_KEY # Google Generative AI API key
 JWT_SECRET         # Secret for JWT token signing
 PORT               # Server port (default: 3000)
+NODE_ENV           # Set to 'production' for production
+```
+
+### Frontend (.env)
+```
+VITE_API_URL       # Backend API URL (e.g., http://localhost:3000)
 ```
 
 ## Troubleshooting

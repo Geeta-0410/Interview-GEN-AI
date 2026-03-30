@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: interview-ai-backend
+    env: node
+    plan: free
+    buildCommand: cd Backend && npm install
+    startCommand: cd Backend && npm start
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: GOOGLE_GENAI_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: NODE_ENV
+        value: production
+    routes:
+      - path: /api
+        destination: http://localhost:3000/api
+
+  - type: web
+    name: interview-ai-frontend
+    env: node
+    plan: free
+    buildCommand: cd Frontend && npm install && npm run build
+    startCommand: cd Frontend && npm run preview
+    staticPublishPath: Frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://interview-ai-backend.onrender.com
