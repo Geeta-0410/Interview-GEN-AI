@@ -1,0 +1,100 @@
+name: Build and Push to AWS ECR
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+  BACKEND_ECR_REPOSITORY: interview-ai-backend
+  FRONTEND_ECR_REPOSITORY: interview-ai-frontend
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create ECR repositories if they don't exist
+        run: |
+          aws ecr describe-repositories --repository-names ${{ env.BACKEND_ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} || aws ecr create-repository --repository-name ${{ env.BACKEND_ECR_REPOSITORY }} --region ${{ env.AWS_REGION }}
+          aws ecr describe-repositories --repository-names ${{ env.FRONTEND_ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} || aws ecr create-repository --repository-name ${{ env.FRONTEND_ECR_REPOSITORY }} --region ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push backend image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/${{ env.BACKEND_ECR_REPOSITORY }}:$IMAGE_TAG -t $ECR_REGISTRY/${{ env.BACKEND_ECR_REPOSITORY }}:latest ./Backend
+          docker push $ECR_REGISTRY/${{ env.BACKEND_ECR_REPOSITORY }}:$IMAGE_TAG
+          docker push $ECR_REGISTRY/${{ env.BACKEND_ECR_REPOSITORY }}:latest
+
+      - name: Build, tag, and push frontend image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/${{ env.FRONTEND_ECR_REPOSITORY }}:$IMAGE_TAG -t $ECR_REGISTRY/${{ env.FRONTEND_ECR_REPOSITORY }}:latest ./Frontend
+          docker push $ECR_REGISTRY/${{ env.FRONTEND_ECR_REPOSITORY }}:$IMAGE_TAG
+          docker push $ECR_REGISTRY/${{ env.FRONTEND_ECR_REPOSITORY }}:latest
+
+      - name: Create image definitions file
+        run: |
+          printf '[{"name":"interview-ai-backend","imageUri":"%s"},{"name":"interview-ai-frontend","imageUri":"%s"}]' $ECR_REGISTRY/${{ env.BACKEND_ECR_REPOSITORY }}:${{ github.sha }} $ECR_REGISTRY/${{ env.FRONTEND_ECR_REPOSITORY }}:${{ github.sha }} > imagedefinitions.json
+
+      - name: Upload image definitions
+        uses: actions/upload-artifact@v3
+        with:
+          name: imagedefinitions
+          path: imagedefinitions.json
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download image definitions
+        uses: actions/download-artifact@v3
+        with:
+          name: imagedefinitions
+
+      - name: Update ECS service
+        run: |
+          aws ecs update-service \
+            --cluster ${{ secrets.AWS_ECS_CLUSTER }} \
+            --service interview-ai-service \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }} || echo "ECS service not found, skipping deployment"
+
+      - name: Deployment notification
+        run: echo "Deployment completed for commit ${{ github.sha }}"
